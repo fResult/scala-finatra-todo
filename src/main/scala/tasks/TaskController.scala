@@ -1,23 +1,28 @@
 package tasks
 
-import com.twitter.finatra.http.Controller
+import com.google.inject.Inject
 import com.twitter.finagle.http.Request
+import com.twitter.finatra.http.Controller
 
-import scala.collection.mutable
-
-class TaskController extends Controller {
-  var todoList = mutable.SortedMap.empty[Int, Todo]
+class TaskController @Inject() (repo: SortedMapTaskRepository)
+    extends Controller {
 
   get("/health-check") { _: Request => "Hello" }
 
   post("/todos") { todo: Todo =>
-    val item = todoList.lastOption
-    val id = item match {
-      case Some(value) => value._1 + 1
-      case None        => 1
-    }
-    todoList.addOne(id -> Todo(id, todo.detail))
+    val createdId = repo.createNewTodo(todo)
+    response.created(s"Created Todo with id: $createdId")
   }
 
-  get("/todos") { _: Request => todoList.values.toList }
+  patch("/todos/next") { todo: Todo =>
+    val result = repo.moveToDoing(todo)
+    result match {
+      case Some(value) =>
+        response.ok(s"Task with id ${value.id.get} was moved to doing")
+      case None => response.notFound("Task was not found")
+    }
+  }
+
+  get("/todos") { _: Request => repo.getAllItemInTodo }
+  get("/doing") { _: Request => repo.getAllItemInDoing }
 }
